@@ -1,0 +1,6 @@
+.next/types/app/api/auth/[...nextauth]/route.ts(12,13): error TS2344: Type 'OmitWithTag<typeof import("D:/FYP Projects/restraunt management system/src/app/api/auth/[...nextauth]/route"), "POST" | "PATCH" | "PUT" | "DELETE" | "GET" | "config" | "generateStaticParams" | ... 8 more ... | "OPTIONS", "">' does not satisfy the constraint '{ [x: string]: never; }'.
+  Property 'authOptions' is incompatible with index signature.
+    Type '{ providers: CredentialsConfig<{ email: { label: string; type: string; }; password: { label: string; type: string; }; }>[]; callbacks: { jwt({ token, user }: { token: any; user: any; }): Promise<any>; session({ session, token }: { ...; }): Promise<...>; }; session: { ...; }; pages: { ...; }; secret: string; debug: b...' is not assignable to type 'never'.
+src/app/(admin)/(others-pages)/(complaint)/add-complaint/page.tsx(31,26): error TS2345: Argument of type 'number' is not assignable to parameter of type 'SetStateAction<string>'.
+src/components/auth/UserAuthBar.tsx(7,40): error TS2503: Cannot find namespace 'JSX'.
+src/components/landing/ReservationForm.tsx(4,44): error TS2503: Cannot find namespace 'JSX'.

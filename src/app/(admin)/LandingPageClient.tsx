@@ -1,28 +1,12 @@
 "use client";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
+import { MenuItem, MenuCategory } from "@/types/global";
 import Button from "@/components/ui/button/Button";
 import Alert from "@/components/ui/alert/Alert";
 import { useUser } from "@/hooks/useUser";
+import PopularPicks from "@/components/ecommerce/PopularPicks";
 
-type MenuItem = {
-  id: number;
-  category_id: number | null;
-  name: string;
-  description: string | null;
-  price: number;
-  is_available: number;
-  image: string | null;
-  prep_time_minutes?: number | null;
-  popularity?: number | null;
-};
-
-type MenuCategory = {
-  id: number;
-  name: string;
-  description: string | null;
-  sort_order: number;
-};
 
 type OrderItem = {
   id: number;
@@ -51,6 +35,10 @@ export default function LandingPageClient() {
   const [alertMessage, setAlertMessage] = useState<string>("");
   const [orders, setOrders] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showFeedbackFor, setShowFeedbackFor] = useState<number | null>(null);
+  const [feedbackRating, setFeedbackRating] = useState(5);
+  const [feedbackComments, setFeedbackComments] = useState("");
+  const [submittingFeedback, setSubmittingFeedback] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -126,6 +114,12 @@ export default function LandingPageClient() {
 
     return result;
   }, [search, menuItems, activeCategory]);
+
+  const topRatedItems = useMemo(() => {
+    const sorted = [...menuItems].sort((a, b) => (Number(b.popularity) || 0) - (Number(a.popularity) || 0));
+    const hasPopularity = sorted.some(m => (Number(m.popularity) || 0) > 0);
+    return hasPopularity ? sorted.filter(m => (Number(m.popularity) || 0) > 0).slice(0, 5) : sorted.slice(0, 5);
+  }, [menuItems]);
 
   const subtotal = useMemo(() => cart.reduce((sum, c) => sum + c.item.price * c.qty, 0), [cart]);
   const tax = useMemo(() => Math.round(subtotal * 0.05), [subtotal]);
@@ -211,6 +205,37 @@ export default function LandingPageClient() {
     }
   }
 
+  async function submitFeedback() {
+    if (!showFeedbackFor || !userId) return;
+    try {
+      setSubmittingFeedback(true);
+      const res = await fetch("/api/orders/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          order_id: showFeedbackFor,
+          rating: feedbackRating,
+          comments: feedbackComments
+        })
+      });
+      const j = await res.json();
+      if (res.ok) {
+        setAlertVariant("success");
+        setAlertMessage("Thank you for your feedback!");
+        setShowFeedbackFor(null);
+        setFeedbackComments("");
+        setFeedbackRating(5);
+      } else {
+        setAlertVariant("error");
+        setAlertMessage(j.error || "Failed to submit feedback");
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSubmittingFeedback(false);
+    }
+  }
+
   return (
     <div className="max-w-7xl mx-auto p-0 md:p-0 min-h-screen">
       <section className="px-4 md:px-6 pt-6 pb-4">
@@ -257,6 +282,8 @@ export default function LandingPageClient() {
               ))}
             </div>
 
+            <PopularPicks menuItems={menuItems} onAddToCart={addToCart} />
+
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-4">
               {filteredMenu.map((m) => {
                 const catName = categories.find((c) => c.id === m.category_id)?.name || "General";
@@ -267,6 +294,11 @@ export default function LandingPageClient() {
                     className="group relative flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white transition-all duration-300 hover:-translate-y-1 hover:shadow-xl dark:border-gray-800 dark:bg-gray-900/50 dark:hover:bg-gray-800"
                   >
                     <div className="relative aspect-[4/3] w-full overflow-hidden bg-gray-100 dark:bg-gray-800">
+                      {topRatedItems.some(top => top.id === m.id) && (
+                        <div className="absolute left-3 top-3 z-10 rounded-full bg-brand-500 px-2.5 py-1 text-[10px] font-bold text-white shadow-lg">
+                          POPULAR
+                        </div>
+                      )}
                       {m.image ? (
                         <Image
                           src={m.image}
@@ -392,12 +424,56 @@ export default function LandingPageClient() {
               ) : (
                 <div className="space-y-2 max-h-60 overflow-y-auto">
                   {orders.map((o) => (
-                    <div key={o.id} className="flex items-center justify-between text-sm p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-800">
-                      <div className="flex flex-col">
-                        <span className="font-medium dark:text-gray-200">#{o.order_number || o.id}</span>
-                        <span className="text-xs text-brand-500 capitalize">{String(o.status).replace(/_/g, " ")}</span>
+                    <div key={o.id} className="flex flex-col border-b border-gray-100 dark:border-gray-800 last:border-0 pb-2">
+                      <div className="flex items-center justify-between text-sm p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                        <div className="flex flex-col">
+                          <span className="font-medium dark:text-gray-200">#{o.order_number || o.id}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-brand-500 capitalize">{String(o.status).replace(/_/g, " ")}</span>
+                            <span className="text-[10px] text-gray-400">{new Date(o.created_at).toLocaleDateString()}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold dark:text-gray-100">Rs. {o.total}</span>
+                          <button
+                            onClick={() => setShowFeedbackFor(o.id)}
+                            className="text-[10px] font-bold text-brand-600 hover:text-brand-700 underline"
+                          >
+                            Feedback
+                          </button>
+                        </div>
                       </div>
-                      <span className="text-xs text-gray-500 dark:text-gray-400">{new Date(o.created_at).toLocaleDateString()}</span>
+                      
+                      {showFeedbackFor === o.id && (
+                        <div className="mt-2 bg-gray-50 dark:bg-gray-800/50 p-3 rounded-xl border border-brand-100 dark:border-brand-900/30">
+                          <h4 className="text-xs font-bold mb-2 dark:text-gray-200">Rate your experience</h4>
+                          <div className="flex gap-1 mb-3">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <button
+                                key={star}
+                                onClick={() => setFeedbackRating(star)}
+                                className={`text-lg transition-colors ${feedbackRating >= star ? "text-orange-400" : "text-gray-300 dark:text-gray-600"}`}
+                              >
+                                ★
+                              </button>
+                            ))}
+                          </div>
+                          <textarea
+                            value={feedbackComments}
+                            onChange={(e) => setFeedbackComments(e.target.value)}
+                            placeholder="Tell us about your meal..."
+                            className="w-full text-xs p-2 rounded-lg border dark:bg-gray-900 dark:border-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-brand-500 outline-none mb-3 h-16 resize-none"
+                          />
+                          <div className="flex gap-2">
+                            <Button size="sm" onClick={submitFeedback} disabled={submittingFeedback} className="flex-1 text-[10px]">
+                              {submittingFeedback ? "Sending..." : "Submit Feedback"}
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => setShowFeedbackFor(null)} className="text-[10px]">
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

@@ -35,6 +35,12 @@ export async function GET(req) {
     const from = searchParams.get("from");
     const to = searchParams.get("to");
     const user_id_param = searchParams.get("user_id");
+    const authId = getAuthUserId(req);
+
+    // Migration: Ensure created_by exists
+    try {
+      await db.execute("ALTER TABLE orders ADD COLUMN created_by INT NULL AFTER assigned_to, ADD INDEX (created_by)");
+    } catch { }
 
     const where = [];
     const args = [];
@@ -58,26 +64,17 @@ export async function GET(req) {
       }
     }
     if (!user_id_param) {
-      const authId = getAuthUserId(req);
       if (authId) {
         try {
           const [u] = await db.execute("SELECT role FROM users WHERE id = ?", [authId]);
           const role = String(u?.[0]?.role || "").toLowerCase();
           if (role === "customer") {
             where.push("o.user_id = ?");
-            console.log("load for customer");
             args.push(authId);
-          } else if (role === "waiter") {
-            where.push("o.assigned_to = ?");
-            args.push(authId);
-            console.log("load for waiter");
-          } else if (role === "delivery") {
-            where.push("o.assigned_to = ?");
-            args.push(authId);
-            // where.push("o.status <> ?");
-            // args.push("created");
-            console.log("load for delivery");
-
+          } else if (role === "waiter" || role === "delivery") {
+            // Staff can see orders they created OR orders assigned to them
+            where.push("(o.assigned_to = ? OR o.created_by = ?)");
+            args.push(authId, authId);
           }
         } catch { }
       }
@@ -99,6 +96,7 @@ export async function GET(req) {
           o.service_charge,
           o.status,
           o.assigned_to,
+          o.created_by,
           o.placed_at,
           o.completed_at,
           o.created_at,
@@ -125,6 +123,7 @@ export async function GET(req) {
           service_charge,
           status,
           assigned_to,
+          created_by,
           placed_at,
           completed_at,
           created_at
@@ -159,6 +158,25 @@ export async function POST(req) {
     const user_id = body?.user_id !== undefined ? Number(body.user_id) : null;
     const delivery_address = String(body?.delivery_address || "").trim() || null;
     const placed_by = getAuthUserId(req);
+    const items = Array.isArray(body?.items) ? body.items : [];
+
+    // Ensure order_items table exists
+    try {
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS order_items (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          order_id INT NOT NULL,
+          menu_item_id INT NOT NULL,
+          quantity INT NOT NULL,
+          price DECIMAL(10, 2) NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          INDEX (order_id),
+          INDEX (menu_item_id)
+        )
+      `);
+    } catch (e) {
+      console.error("Failed to ensure order_items table:", e);
+    }
 
     // order_type always normalized; no need to hard-fail on missing
     if (!Number.isFinite(total_amount) || total_amount <= 0) {
@@ -179,13 +197,43 @@ export async function POST(req) {
         }
     }
 
+    // Migration: Ensure created_by exists
+    try {
+      await db.execute("ALTER TABLE orders ADD COLUMN created_by INT NULL AFTER assigned_to, ADD INDEX (created_by)");
+    } catch { }
+
     const order_number = `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
     const [result] = await db.execute(
-      "INSERT INTO orders (order_number, user_id, table_id, delivery_address, order_type, total_amount, tax_amount, discount_amount, service_charge, status, assigned_to, placed_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())",
-      [order_number, user_id, table_id, delivery_address, order_type, total_amount, tax_amount, discount_amount, service_charge, "created", assigned_to]
+      "INSERT INTO orders (order_number, user_id, table_id, delivery_address, order_type, total_amount, tax_amount, discount_amount, service_charge, status, assigned_to, created_by, placed_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())",
+      [order_number, user_id, table_id, delivery_address, order_type, total_amount, tax_amount, discount_amount, service_charge, "created", assigned_to, placed_by]
     );
 
     const insertedId = result?.insertId;
+    
+    // Save items and update popularity
+    if (insertedId && items.length > 0) {
+      for (const item of items) {
+        const mid = Number(item.menu_item_id);
+        const qty = Number(item.quantity) || 1;
+        const price = Number(item.price) || 0;
+        if (mid) {
+          try {
+            await db.execute(
+              "INSERT INTO order_items (order_id, menu_item_id, quantity, price) VALUES (?, ?, ?, ?)",
+              [insertedId, mid, qty, price]
+            );
+            // Increment popularity by quantity ordered
+            await db.execute(
+              "UPDATE menu_items SET popularity = COALESCE(popularity, 0) + ? WHERE id = ?",
+              [qty, mid]
+            );
+          } catch (e) {
+            console.error(`Failed to process order item for menu_item_id ${mid}:`, e);
+          }
+        }
+      }
+    }
+
     if (table_id !== null) {
       try {
         await db.execute("UPDATE dining_tables SET is_active = 0 WHERE id = ?", [table_id]);

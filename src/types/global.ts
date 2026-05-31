@@ -209,3 +209,22 @@ export type Announcement = {
     email: string;
   };
 };
+
+export interface MenuItem {
+  id: number;
+  category_id: number | null;
+  name: string;
+  description: string | null;
+  price: number;
+  is_available: number;
+  image: string | null;
+  popularity?: number | null;
+  prep_time_minutes?: number | null;
+}
+
+export interface MenuCategory {
+  id: number;
+  name: string;
+  description: string | null;
+  sort_order: number;
+}

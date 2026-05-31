@@ -13,6 +13,7 @@ import {
   FaDollarSign,
   FaPhone
 } from "react-icons/fa6";
+import OrderFeedback from "@/components/ecommerce/OrderFeedback";
 
 export const metadata: Metadata = {
   title: "Order Details | MyResto",
@@ -40,6 +41,17 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ sl
   });
   const result = await res.json();
   const order = result?.data || null;
+
+  // Fetch feedback if order exists
+  let feedback = null;
+  if (order) {
+    const resFeedback = await fetch(`${baseUrl}/api/orders/feedback?order_id=${order.id}`, {
+      cache: "no-store",
+      headers: bearer ? { Authorization: `Bearer ${bearer}` } : undefined,
+    });
+    const feedbackResult = await resFeedback.json();
+    feedback = feedbackResult?.data?.[0] || null;
+  }
 
   if (!order) {
     return (
@@ -229,6 +241,9 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ sl
               )}
             </div>
           </div>
+
+          {/* Feedback Section */}
+          <OrderFeedback orderId={order.id} initialFeedback={feedback} />
         </div>
       </div>
     </div>

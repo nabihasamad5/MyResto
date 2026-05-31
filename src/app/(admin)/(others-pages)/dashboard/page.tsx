@@ -8,6 +8,7 @@ import { useUser } from "@/hooks/useUser";
 import { useRouter } from "next/navigation";
 import StatisticsChart from "@/components/ecommerce/StatisticsChart";
 import LandingPageClient from "../../LandingPageClient";
+import AIPredictionCard from "@/components/ecommerce/AIPredictionCard";
 
 
 export default function DashboardHome() {
@@ -17,7 +18,9 @@ export default function DashboardHome() {
   const [orders, setOrders] = useState<Order[]>([]);
 
   useEffect(() => {
-    setRole(userData?.role ? String(userData.role).toLowerCase() : null);
+    const r = userData?.role ? String(userData.role).toLowerCase() : null;
+    console.log("Dashboard Role Debug:", r);
+    setRole(r);
   }, [userData?.role]);
 
   useEffect(() => {
@@ -57,6 +60,11 @@ export default function DashboardHome() {
   return (
     <div className="grid grid-cols-12 gap-4 md:gap-6">
       <div className="col-span-12 space-y-6 xl:col-span-12">
+        {(role === "admin" || role === "manager") && (
+          <div className="mb-6">
+            <AIPredictionCard />
+          </div>
+        )}
         {role === "admin" ? <FinanceReportPage /> : null}
         <RestaurantMetrics orders={orders} />
         <StatisticsChart orders={orders} />

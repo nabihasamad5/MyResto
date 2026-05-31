@@ -4,23 +4,9 @@ import Image from "next/image";
 import Button from "@/components/ui/button/Button";
 import { useUser } from "@/hooks/useUser";
 import Alert from "@/components/ui/alert/Alert";
+import PopularPicks from "@/components/ecommerce/PopularPicks";
+import { MenuItem, MenuCategory } from "@/types/global";
 
-type MenuItem = {
-  id: number;
-  category_id: number | null;
-  name: string;
-  description: string | null;
-  price: number;
-  is_available: number;
-  image: string | null;
-};
-
-type MenuCategory = {
-  id: number;
-  name: string;
-  description: string | null;
-  sort_order: number;
-};
 
 type CartItem = {
   item: MenuItem;
@@ -91,6 +77,13 @@ export default function Page() {
 
     return result;
   }, [search, selectedCategory, menuItems]);
+
+  const topRatedItems = useMemo(() => {
+    const sorted = [...menuItems].sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+    const hasPopularity = sorted.some(m => (m.popularity || 0) > 0);
+    // If no items have popularity > 0, just show the first 5 items as "Picks for you"
+    return hasPopularity ? sorted.filter(m => (m.popularity || 0) > 0).slice(0, 5) : sorted.slice(0, 5);
+  }, [menuItems]);
 
   const subtotal = useMemo(() => {
     return cart.reduce((sum, c) => sum + c.item.price * c.qty, 0);
@@ -236,6 +229,11 @@ export default function Page() {
         tax_amount: tax,
         service_charge: serviceCharge,
         discount_amount: 0,
+        items: cart.map(c => ({
+          menu_item_id: c.item.id,
+          quantity: c.qty,
+          price: c.item.price
+        }))
       };
       const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
       const res = await fetch("/api/orders", {
@@ -285,6 +283,9 @@ export default function Page() {
             className="w-full rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-brand-500 dark:bg-gray-800 dark:text-gray-200"
           />
         </div>
+
+        <PopularPicks menuItems={menuItems} onAddToCart={addToCart} />
+
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setSelectedCategory("All")}
@@ -315,16 +316,24 @@ export default function Page() {
               <button
                 key={m.id}
                 onClick={() => addToCart(m)}
-                className="group relative flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white transition-all duration-300 hover:-translate-y-1 hover:shadow-xl dark:border-gray-800 dark:bg-gray-900/50 dark:hover:bg-gray-800"
+                disabled={!m.is_available}
+                className={`group relative flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white transition-all duration-300  hover:shadow-xl dark:border-gray-800 dark:bg-gray-900/50 dark:hover:bg-gray-800 ${!m.is_available ? "opacity-50 cursor-not-allowed" : "hover:-translate-y-1"
+                  }`}
               >
                 <div className="relative aspect-[4/3] w-full overflow-hidden bg-gray-100 dark:bg-gray-800">
+                  {topRatedItems.some(top => top.id === m.id) && (
+                    <div className="absolute left-3 top-3 z-10 rounded-full bg-brand-500 px-2.5 py-1 text-[10px] font-bold text-white shadow-lg">
+                      POPULAR
+                    </div>
+                  )}
                   {m.image ? (
                     <Image
                       src={m.image}
                       alt={m.name}
                       width={320}
                       height={320}
-                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+                      className={`h-full w-full object-cover transition-transform duration-500  ${!m.is_available ? "" : "group-hover:scale-110"
+                        }`}
                     />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center p-6">
@@ -333,7 +342,7 @@ export default function Page() {
                         alt={m.name}
                         width={120}
                         height={120}
-                        className="opacity-50 grayscale transition-all duration-300 group-hover:grayscale-0 group-hover:opacity-100"
+                        className={`opacity-50 grayscale transition-all duration-300  ${!m.is_available ? "" : "group-hover:grayscale-0 group-hover:opacity-100"}`}
                       />
                     </div>
                   )}
@@ -341,6 +350,7 @@ export default function Page() {
                     Rs. {m.price}
                   </div>
                 </div>
+
 
                 <div className="flex flex-1 flex-col p-4 text-left">
                   <div className="mb-1 flex items-start justify-between">
@@ -351,6 +361,13 @@ export default function Page() {
 
                   <p className="mb-4 line-clamp-2 text-sm text-gray-500 dark:text-gray-400">
                     {m.description || `Delicious ${m.name} prepared fresh for you.`}
+                  </p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    {m.is_available ? (
+                      <span className="text-green-500 font-semibold"></span>
+                    ) : (
+                      <span className="text-red-500 font-semibold">Not Available</span>
+                    )}
                   </p>
 
                   <div className="mt-auto flex items-center justify-between border-t border-gray-100 pt-3 dark:border-gray-800">

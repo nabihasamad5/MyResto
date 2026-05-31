@@ -104,8 +104,7 @@ export default function LandingPage(): JSX.Element {
               <p className="mt-3 text-lg md:text-2xl text-gray-200">Elevated dining with a modern touch</p>
               <div className="mt-6 flex items-center justify-center gap-3">
                 <a href="/dashboard" className="px-5 py-2 rounded-full bg-white text-gray-900 font-medium">
-                  {/* Dashboard */}
-                  Home Page
+                  Dashboard
                 </a>
                 <a href="/reservations" className="px-5 py-2 rounded-full bg-brand-500 hover:bg-brand-600 text-white font-medium">
                   Make Reservation

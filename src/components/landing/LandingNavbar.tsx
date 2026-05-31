@@ -24,7 +24,7 @@ export default function LandingNavbar() {
         { href: "#gallery", label: "Gallery" },
         { href: "#location", label: "Location" },
         { href: "#testimonials", label: "Reviews" },
-        // { href: "/reservations", label: "Reservation" },
+        { href: "/reservations", label: "Reservation" },
     ];
 
     return (

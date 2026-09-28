@@ -1,11 +1,11 @@
 import mysql from "mysql2/promise";
 
 const dbConfig = {
-  host: "localhost",
-  port: 3306,
-  user: "root",
-  password: "",
-  database: "rms_db",
+  host: process.env.DB_HOST || "sql12.freesqldatabase.com",
+  port: Number(process.env.DB_PORT) || 3306,
+  user: process.env.DB_USER || "sql12837965",
+  password: process.env.DB_PASSWORD || "jSrY4TFAyW",
+  database: process.env.DB_NAME || "sql12837965",
   waitForConnections: true,
   connectionLimit: 5,
   queueLimit: 0,
